@@ -1,0 +1,29 @@
+services:
+  printer:
+    build:
+      context: https://github.com/mainsail-crew/virtual-klipper-printer.git
+      args:
+        KLIPPER_REPO: ${KLIPPER_REPO:-https://github.com/Klipper3d/klipper.git}
+    volumes:
+      - ./printer_data:/home/printer/printer_data:delegated
+    platform: linux/amd64
+    restart: unless-stopped
+    ports:
+      - "7125:7125"
+      - "8110:8080"
+  mainsail:
+    image: ghcr.io/mainsail-crew/mainsail
+    restart: unless-stopped
+    configs:
+      - source: mainsail
+        target: /usr/share/nginx/html/config.json
+    ports:
+      - "8080:80"
+
+configs:
+  mainsail:
+    content: |
+      {
+        "instancesDB": "json",
+        "instances": [{ "hostname": "localhost", "port": 7125 }]
+      }
