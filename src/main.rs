@@ -10,5 +10,15 @@ async fn main() -> anyhow::Result<()> {
         .finish()
         .try_init()?;
     connect_moonraker().await?;
+
+    // Start moonraker integration in its own thread
+    // let moonraker = Moonraker::new("http://localhost:7125/").await?;
+
+    // Start Discord integration in its own thread
+    // let discord = Discord::new(token).await?;
+
+    // moonraker.map(|event| bussiness_logic(event)).pipe.subscribe(discord).await?;
+    // discord.map(business_logic).pipe.subscribe(moonraker).await?;
+
     Ok(())
 }
