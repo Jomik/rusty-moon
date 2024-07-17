@@ -5,8 +5,12 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1.0.86"
+config = "0.14.0"
 jsonrpsee = { version = "0.24.0", features = ["tokio", "ws-client"] }
+jsonrpsee-core = "0.24.0"
+serde = "1.0.204"
 serde_json = "1.0.120"
+thiserror = "1.0.62"
 tokio = { version = "1.38.0", features = ["full"] }
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
