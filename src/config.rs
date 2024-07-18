@@ -1,12 +1,10 @@
-use std::borrow::Cow;
-
 pub use config::ConfigError;
 
 use crate::moonraker;
 
 #[derive(Debug, Clone, serde::Deserialize)]
 pub struct Config {
-    pub moonraker: Cow<'static, moonraker::Config>,
+    pub moonraker: moonraker::Config,
 }
 
 pub fn load() -> Result<Config, ConfigError> {
