@@ -38,7 +38,7 @@ pub struct PrintStats {
 #[derive(Clone, Debug, Default, Deserialize)]
 pub struct PrinterObjectStatus {
     pub display_status: Option<DisplayStatus>,
-    pub idle_timeout: IdleTimeout,
+    pub idle_timeout: Option<IdleTimeout>,
     pub print_stats: PrintStats,
 }
 

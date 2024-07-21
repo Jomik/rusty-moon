@@ -14,8 +14,8 @@ pub struct Client {
 }
 
 impl Client {
-    pub fn builder() -> ClientBuilder {
-        ClientBuilder::new()
+    pub fn builder(url: impl AsRef<str>) -> ClientBuilder {
+        ClientBuilder::new(url)
     }
 
     pub async fn subscribe_printer_status(

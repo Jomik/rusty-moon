@@ -1,3 +1,6 @@
+use std::future::{Future, IntoFuture};
+use std::pin::Pin;
+
 use anyhow::Result;
 use tokio::sync::mpsc;
 use tokio::task::yield_now;
@@ -13,22 +16,26 @@ pub struct Config {
     pub url: String,
 }
 
-pub struct ServiceBuilder {}
+pub struct ServiceBuilder {
+    config: Config,
+}
 
 impl ServiceBuilder {
-    pub fn new() -> Self {
-        Self {}
-    }
-    pub async fn build(self, conf: Config) -> Result<Service> {
-        let client = client::Client::builder().build(conf.url).await?;
-
-        Ok(Service { client })
+    pub fn new(config: Config) -> Self {
+        Self { config }
     }
 }
 
-impl Default for ServiceBuilder {
-    fn default() -> Self {
-        Self::new()
+impl IntoFuture for ServiceBuilder {
+    type Output = Result<Service>;
+    type IntoFuture = Pin<Box<dyn Future<Output = Self::Output>>>;
+
+    fn into_future(self) -> Self::IntoFuture {
+        Box::pin(async move {
+            let client = client::Client::builder(self.config.url).await?;
+
+            Ok(Service { client })
+        })
     }
 }
 
@@ -43,8 +50,8 @@ pub enum Event {
 }
 
 impl Service {
-    pub fn builder() -> ServiceBuilder {
-        ServiceBuilder::new()
+    pub fn builder(config: Config) -> ServiceBuilder {
+        ServiceBuilder::new(config)
     }
 
     pub async fn start(self, events_tx: mpsc::Sender<Event>) -> Result<()> {

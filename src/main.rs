@@ -12,12 +12,13 @@ async fn main() -> anyhow::Result<()> {
 
     tracing_subscriber::FmtSubscriber::builder()
         .with_max_level(Level::INFO)
+        .pretty()
         .finish()
         .try_init()?;
 
     let (events_tx, mut events_rx) = mpsc::channel::<moonraker::Event>(100);
 
-    let moon = Service::builder().build(conf.moonraker).await?;
+    let moon = Service::builder(conf.moonraker).await?;
     tokio::spawn(async move {
         if let Err(err) = moon.start(events_tx).await {
             tracing::error!("Moonraker error: {:?}", err);
