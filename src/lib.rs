@@ -1,4 +1,5 @@
 pub mod config;
+pub mod discord;
 pub mod moonraker;
 
 // pub async fn connect_moonraker() -> anyhow::Result<()> {

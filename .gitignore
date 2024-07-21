@@ -18,3 +18,4 @@ Cargo.lock
 /target
 
 printer_data/
+config.local.toml
