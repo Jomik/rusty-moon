@@ -44,7 +44,7 @@ impl Client {
             .await?;
         while let Some(result) = sub.next().await {
             let notif = result?;
-            tracing::info!("status update: {:?}", notif);
+            tracing::trace!("status update: {:?}", notif);
             tx.send(notif).await?;
         }
         Ok(())
