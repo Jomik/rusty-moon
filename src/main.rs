@@ -9,7 +9,7 @@ async fn main() -> anyhow::Result<()> {
     let conf = config::load()?;
 
     tracing_subscriber::FmtSubscriber::builder()
-        .with_max_level(Level::INFO)
+        .with_max_level(Level::DEBUG)
         .pretty()
         .finish()
         .try_init()?;

@@ -2,12 +2,17 @@
 name = "rusty-moon"
 version = "0.1.0"
 edition = "2021"
+homepage = "https://github.com/Jomik/rusty-moon"
+license = "GPL-3.0"
 
 [dependencies]
 anyhow = "1.0.86"
 config = "0.14.0"
-jsonrpsee = { version = "0.24.0", features = ["tokio", "ws-client"] }
-jsonrpsee-core = "0.24.0"
+jsonrpsee = { version = "0.24.1", features = [
+  "tokio",
+  "ws-client",
+  "jsonrpsee-core",
+] }
 serde = "1.0.204"
 serde_json = "1.0.120"
 serenity = "0.12.2"

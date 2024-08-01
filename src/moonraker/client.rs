@@ -1,13 +1,21 @@
+use crate::moonraker::IdentifyResult;
+
 use super::api::PrinterStatusNotification;
 use super::client_builder::ClientBuilder;
 use anyhow::Result;
 use jsonrpsee::{
-    core::client::{ClientT, Subscription, SubscriptionClientT},
+    core::{
+        client::{ClientT, Subscription, SubscriptionClientT},
+        params::ObjectParams,
+    },
     ws_client::WsClient,
 };
-use jsonrpsee_core::params::ObjectParams;
-use serde_json::json;
+use serde_json::{json, Value};
 use tokio::sync::mpsc::Sender;
+
+const VERSION: &str = env!("CARGO_PKG_VERSION");
+const NAME: &str = env!("CARGO_PKG_NAME");
+const URL: &str = env!("CARGO_PKG_HOMEPAGE");
 
 pub struct Client {
     pub(crate) client: WsClient,
@@ -16,6 +24,40 @@ pub struct Client {
 impl Client {
     pub fn builder(url: impl AsRef<str>) -> ClientBuilder {
         ClientBuilder::new(url)
+    }
+
+    pub async fn identify(&self) -> Result<()> {
+        let mut params = ObjectParams::new();
+        params.insert("client_name", NAME)?;
+        params.insert("version", VERSION)?;
+        params.insert("url", URL)?;
+        params.insert("type", "agent")?;
+        let response: IdentifyResult = self
+            .client
+            .request("server.connection.identify", params)
+            .await?;
+        tracing::debug!("identify: {:?}", response);
+        Ok(())
+    }
+
+    pub async fn subscribe_remote_method(&self, method: impl AsRef<str>) -> Result<()> {
+        let mut params = ObjectParams::new();
+        let method = method.as_ref();
+        params.insert("method_name", method)?;
+        let response: String = self
+            .client
+            .request("connection.register_remote_method", params)
+            .await?;
+        tracing::debug!("register_remote_method: {:?}", response);
+
+        let mut sub: Subscription<Value> = self.client.subscribe_to_method(method).await?;
+        while let Some(result) = sub.next().await {
+            let notif = result?;
+            tracing::trace!("{}: {:?}", method, notif);
+            // tx.send(notif).await?;
+        }
+
+        Ok(())
     }
 
     pub async fn subscribe_printer_status(
@@ -36,7 +78,7 @@ impl Client {
             .client
             .request("printer.objects.subscribe", params)
             .await?;
-        tracing::info!("initial: {:?}", response);
+        tracing::debug!("initial: {:?}", response);
 
         let mut sub: Subscription<PrinterStatusNotification> = self
             .client

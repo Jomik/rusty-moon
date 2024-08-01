@@ -1,9 +1,10 @@
 use std::future::{Future, IntoFuture};
 use std::pin::Pin;
+use std::sync::Arc;
 
 use anyhow::Result;
 use tokio::sync::mpsc;
-use tokio::task::yield_now;
+use tokio::task::{yield_now, JoinSet};
 
 pub use self::api::*;
 
@@ -32,7 +33,7 @@ impl IntoFuture for ServiceBuilder {
 
     fn into_future(self) -> Self::IntoFuture {
         Box::pin(async move {
-            let client = client::Client::builder(self.config.url).await?;
+            let client = Arc::new(client::Client::builder(self.config.url).await?);
 
             Ok(Service { client })
         })
@@ -40,7 +41,7 @@ impl IntoFuture for ServiceBuilder {
 }
 
 pub struct Service {
-    client: client::Client,
+    client: Arc<client::Client>,
 }
 
 #[derive(Debug)]
@@ -54,17 +55,36 @@ impl Service {
         ServiceBuilder::new(config)
     }
 
-    pub async fn start(self, events_tx: mpsc::Sender<Event>) -> Result<()> {
-        let client = self.client;
+    pub async fn start(&self, events_tx: mpsc::Sender<Event>) -> Result<()> {
+        let client = self.client.clone();
 
         let (status_tx, mut status_rx) = mpsc::channel::<PrinterStatusNotification>(100);
 
-        tokio::spawn(async move {
-            // TODO: Handle subscription errors
-            if let Err(err) = client.subscribe_printer_status(status_tx).await {
-                tracing::error!("Subscription error: {:?}", err);
-            }
-        });
+        client.identify().await?;
+        let mut tasks = JoinSet::new();
+
+        {
+            let client = client.clone();
+            tasks.spawn(async move {
+                // TODO: Handle subscription errors
+                if let Err(err) = client
+                    .subscribe_remote_method("rusty_moon_notification")
+                    .await
+                {
+                    tracing::error!("Subscription error: {:?}", err);
+                }
+            });
+        }
+
+        {
+            let client = client.clone();
+            tasks.spawn(async move {
+                // TODO: Handle subscription errors
+                if let Err(err) = client.subscribe_printer_status(status_tx).await {
+                    tracing::error!("Subscription error: {:?}", err);
+                }
+            });
+        }
 
         let current_status = PrinterObjectStatus::default();
         while let Some(printer) = status_rx.recv().await {
@@ -90,6 +110,8 @@ impl Service {
 
             yield_now().await;
         }
+
+        tasks.shutdown().await;
         Ok(())
     }
 }

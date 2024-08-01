@@ -48,3 +48,8 @@ pub struct PrinterStatusNotification {
     #[serde(rename = "eventtime")]
     pub event_time: f64,
 }
+
+#[derive(Clone, Debug, Default, Deserialize)]
+pub struct IdentifyResult {
+    pub connection_id: u64,
+}
