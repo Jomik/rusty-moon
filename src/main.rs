@@ -1,4 +1,4 @@
-use tokio::sync::mpsc;
+use tokio::sync::watch;
 use tracing::Level;
 use tracing_subscriber::util::SubscriberInitExt;
 
@@ -14,17 +14,17 @@ async fn main() -> anyhow::Result<()> {
         .finish()
         .try_init()?;
 
-    let (events_tx, events_rx) = mpsc::channel::<moonraker::Event>(100);
+    let (status_tx, status_rx) = watch::channel(moonraker::Status::default());
 
     let moon = moonraker::Service::builder(conf.moonraker).await?;
     tokio::spawn(async move {
-        if let Err(err) = moon.start(events_tx).await {
+        if let Err(err) = moon.start(status_tx).await {
             tracing::error!("Moonraker error: {:?}", err);
         }
     });
 
     let discord = discord::Service::builder(conf.discord).await?;
-    if let Err(err) = discord.start(events_rx).await {
+    if let Err(err) = discord.start(status_rx).await {
         tracing::error!("Discord error: {:?}", err);
     }
 

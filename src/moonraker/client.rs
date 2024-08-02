@@ -11,7 +11,7 @@ use jsonrpsee::{
     ws_client::WsClient,
 };
 use serde_json::{json, Value};
-use tokio::sync::mpsc::Sender;
+use tokio::sync::watch::Sender;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 const NAME: &str = env!("CARGO_PKG_NAME");
@@ -87,7 +87,7 @@ impl Client {
         while let Some(result) = sub.next().await {
             let notif = result?;
             tracing::trace!("status update: {:?}", notif);
-            tx.send(notif).await?;
+            tx.send_replace(notif);
         }
         Ok(())
     }

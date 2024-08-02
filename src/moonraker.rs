@@ -3,14 +3,16 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 use anyhow::Result;
-use tokio::sync::mpsc;
+use tokio::sync::watch;
 use tokio::task::{yield_now, JoinSet};
 
 pub use self::api::*;
+pub use self::status::*;
 
 mod api;
 mod client;
 mod client_builder;
+mod status;
 
 #[derive(Debug, Clone, serde::Deserialize)]
 pub struct Config {
@@ -44,21 +46,13 @@ pub struct Service {
     client: Arc<client::Client>,
 }
 
-#[derive(Debug)]
-pub enum Event {
-    LayerChanged(Option<u16>),
-    PrinterStatusChanged(PrinterObjectStatus),
-}
-
 impl Service {
     pub fn builder(config: Config) -> ServiceBuilder {
         ServiceBuilder::new(config)
     }
 
-    pub async fn start(&self, events_tx: mpsc::Sender<Event>) -> Result<()> {
+    pub async fn start(&self, status_tx: watch::Sender<Status>) -> Result<()> {
         let client = self.client.clone();
-
-        let (status_tx, mut status_rx) = mpsc::channel::<PrinterStatusNotification>(100);
 
         client.identify().await?;
         let mut tasks = JoinSet::new();
@@ -76,39 +70,52 @@ impl Service {
             });
         }
 
+        let (status_notif_tx, mut status_notif_rx) =
+            watch::channel::<PrinterStatusNotification>(PrinterStatusNotification::default());
         {
             let client = client.clone();
+
             tasks.spawn(async move {
                 // TODO: Handle subscription errors
-                if let Err(err) = client.subscribe_printer_status(status_tx).await {
+                if let Err(err) = client.subscribe_printer_status(status_notif_tx).await {
                     tracing::error!("Subscription error: {:?}", err);
                 }
             });
         }
 
-        let current_status = PrinterObjectStatus::default();
-        while let Some(printer) = status_rx.recv().await {
-            events_tx
-                .send(Event::PrinterStatusChanged(printer.status.clone()))
-                .await?;
-            if let Some(info) = printer.status.print_stats.info {
-                if info.current_layer
-                    != current_status
-                        .print_stats
-                        .info
-                        .unwrap_or(PrintStatsInfo {
-                            current_layer: None,
-                            total_layer: None,
-                        })
-                        .current_layer
-                {
-                    events_tx
-                        .send(Event::LayerChanged(info.current_layer))
-                        .await?;
+        loop {
+            let notif = status_notif_rx.borrow_and_update().clone();
+            status_tx.send_modify(|current| {
+                current.state = match notif.status.print_stats.state.as_deref() {
+                    None => State::default(),
+                    Some("standby") => State::Standby,
+                    Some("printing") => State::Printing,
+                    // TODO: Handle paused during timelapses
+                    Some("paused") => State::Paused,
+                    Some("complete") => State::Complete,
+                    Some("error") => {
+                        State::Error(notif.status.print_stats.message.unwrap_or_default())
+                    }
+                    _ => State::Error(format!(
+                        "unknown state: {:?}",
+                        notif.status.print_stats.state
+                    )),
+                };
+
+                if let Some(info) = notif.status.print_stats.info {
+                    let _ = current.printer.insert(Printer {
+                        current_layer: info.current_layer.unwrap_or_default(),
+                        total_layer: info.total_layer.unwrap_or_default(),
+                    });
+                } else {
+                    current.printer = None;
                 }
-            }
+            });
 
             yield_now().await;
+            if status_notif_rx.changed().await.is_err() {
+                break;
+            }
         }
 
         tasks.shutdown().await;

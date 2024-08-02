@@ -5,12 +5,12 @@ use std::{
 
 use anyhow::Result;
 use serenity::{
-    all::{CreateMessage, GatewayIntents, UserId},
+    all::{CreateMessage, EditMessage, GatewayIntents, UserId},
     Client,
 };
-use tokio::{sync::mpsc, task::yield_now};
+use tokio::{sync::watch, task::yield_now};
 
-use crate::moonraker::Event;
+use crate::moonraker;
 
 #[derive(Debug, Clone, serde::Deserialize)]
 pub struct Config {
@@ -38,14 +38,17 @@ impl IntoFuture for ServiceBuilder {
         Box::pin(async move {
             // let token = env::var("DISCORD_TOKEN").expect("Expected a token in the environment");
             let client = Client::builder(self.config.token, intents).await?;
-            Ok(Service { client, user })
+            Ok(Service {
+                client,
+                user_id: user,
+            })
         })
     }
 }
 
 pub struct Service {
     client: Client,
-    user: UserId,
+    user_id: UserId,
 }
 
 impl Service {
@@ -53,27 +56,21 @@ impl Service {
         ServiceBuilder::new(config)
     }
 
-    pub async fn start(self, mut events_rx: mpsc::Receiver<Event>) -> Result<()> {
+    pub async fn start(self, mut status_rx: watch::Receiver<moonraker::Status>) -> Result<()> {
         let http = self.client.http;
-        while let Some(event) = events_rx.recv().await {
-            let content = match event {
-                Event::LayerChanged(layer) => {
-                    if layer.is_none() {
-                        continue;
-                    }
-                    Some(format!("Layer: {:?}", layer.unwrap()))
-                }
-                Event::PrinterStatusChanged(_status) => {
-                    // Ignore this
-                    None
-                }
-            };
-            if let Some(content) = content {
-                tracing::info!("Sending message: {:?}", content);
-                let builder = CreateMessage::new().content(content);
-                self.user.direct_message(http.clone(), builder).await?;
-            }
+        let user = self.user_id.to_user(http.clone()).await?;
+
+        let message_builder = CreateMessage::new().content("Hello!");
+        let mut message = user.direct_message(http.clone(), message_builder).await?;
+
+        loop {
+            let status = status_rx.borrow_and_update().clone();
+            let edit_builder = EditMessage::new().content(format!("{:?}", status));
+            message.edit(http.clone(), edit_builder).await?;
             yield_now().await;
+            if status_rx.changed().await.is_err() {
+                break;
+            }
         }
 
         Ok(())

@@ -6,17 +6,9 @@ pub struct DisplayStatus {
     pub message: Option<String>,
 }
 
-#[derive(Copy, Clone, Debug, Default, Deserialize)]
-pub enum IdleState {
-    #[default]
-    Ready,
-    Printing,
-    Idle,
-}
-
-#[derive(Copy, Clone, Debug, Default, Deserialize)]
+#[derive(Clone, Debug, Default, Deserialize)]
 pub struct IdleTimeout {
-    pub state: Option<IdleState>,
+    pub state: Option<String>,
 }
 
 #[derive(Copy, Clone, Debug, Default, Deserialize)]
@@ -28,10 +20,10 @@ pub struct PrintStatsInfo {
 #[derive(Clone, Debug, Default, Deserialize)]
 pub struct PrintStats {
     pub info: Option<PrintStatsInfo>,
+    pub state: Option<String>,
     pub filename: Option<String>,
     pub total_duration: Option<f64>,
     pub filament_used: Option<f64>,
-    pub state: Option<String>,
     pub message: Option<String>,
 }
 
