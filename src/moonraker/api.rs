@@ -35,7 +35,7 @@ pub struct PrinterObjectStatus {
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]
-pub struct PrinterStatusNotification {
+pub struct PrinterObjectStatusResponse {
     pub status: PrinterObjectStatus,
     #[serde(rename = "eventtime")]
     pub event_time: f64,
@@ -44,4 +44,10 @@ pub struct PrinterStatusNotification {
 #[derive(Clone, Debug, Default, Deserialize)]
 pub struct IdentifyResult {
     pub connection_id: u64,
+}
+
+#[derive(Clone, Debug, Default, Deserialize)]
+pub struct ServerInfoResponse {
+    pub klippy_connected: bool,
+    pub klippy_state: String,
 }
