@@ -8,7 +8,7 @@ use serenity::{
     all::{CreateMessage, EditMessage, GatewayIntents, UserId},
     Client,
 };
-use tokio::{sync::watch, task::yield_now};
+use tokio::sync::watch;
 
 use crate::moonraker;
 
@@ -67,7 +67,6 @@ impl Service {
             let status = status_rx.borrow_and_update().clone();
             let edit_builder = EditMessage::new().content(format!("{:?}", status));
             message.edit(http.clone(), edit_builder).await?;
-            yield_now().await;
             if status_rx.changed().await.is_err() {
                 break;
             }

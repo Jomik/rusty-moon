@@ -123,6 +123,7 @@ impl Client {
             .await?;
         Ok(sub)
     }
+
     pub async fn subscribe_klippy_shutdown(&self) -> Result<Subscription<()>> {
         let sub: Subscription<()> = self
             .client
@@ -130,6 +131,7 @@ impl Client {
             .await?;
         Ok(sub)
     }
+
     pub async fn subscribe_klippy_disconnected(&self) -> Result<Subscription<()>> {
         let sub: Subscription<()> = self
             .client

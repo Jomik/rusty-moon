@@ -19,7 +19,8 @@ pub struct PrintStatsInfo {
 
 #[derive(Clone, Debug, Default, Deserialize)]
 pub struct PrintStats {
-    pub info: Option<PrintStatsInfo>,
+    #[serde(default)]
+    pub info: PrintStatsInfo,
     pub state: Option<String>,
     pub filename: Option<String>,
     pub total_duration: Option<f64>,
@@ -29,13 +30,17 @@ pub struct PrintStats {
 
 #[derive(Clone, Debug, Default, Deserialize)]
 pub struct PrinterObjectStatus {
-    pub display_status: Option<DisplayStatus>,
-    pub idle_timeout: Option<IdleTimeout>,
+    #[serde(default)]
+    pub display_status: DisplayStatus,
+    #[serde(default)]
+    pub idle_timeout: IdleTimeout,
+    #[serde(default)]
     pub print_stats: PrintStats,
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]
 pub struct PrinterObjectStatusResponse {
+    #[serde(default)]
     pub status: PrinterObjectStatus,
     #[serde(rename = "eventtime")]
     pub event_time: f64,
