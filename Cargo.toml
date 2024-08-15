@@ -8,7 +8,7 @@ license = "GPL-3.0"
 [dependencies]
 anyhow = "1.0.86"
 config = "0.14.0"
-jsonrpsee = { version = "0.24.2", features = [
+jsonrpsee = { version = "0.24.3", features = [
   "tokio",
   "ws-client",
   "jsonrpsee-core",

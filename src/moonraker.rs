@@ -3,12 +3,9 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 use anyhow::Result;
-use jsonrpsee::core::client::Subscription;
-use serde_json::Value;
 use tokio::select;
-use tokio::sync::watch;
+use tokio::sync::{mpsc, watch};
 
-pub use self::api::*;
 pub use self::status::*;
 
 mod api;
@@ -18,12 +15,22 @@ mod status;
 
 const NOTIFICATION_METHOD: &str = "rusty_moon_notification";
 
+#[derive(Debug, Clone, serde::Deserialize)]
+struct NotificationParams {
+    pub message: String,
+}
+
 #[derive(Clone, Debug, Default)]
 pub enum KlippyState {
     #[default]
     Disconnected,
     Ready,
     Shutdown,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct Notification {
+    pub message: String,
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]
@@ -63,14 +70,21 @@ impl Service {
         ServiceBuilder::new(config)
     }
 
-    pub async fn start(self, status_tx: watch::Sender<Status>) -> Result<()> {
-        let client = self.client.clone();
+    pub async fn start(
+        self,
+        status_tx: watch::Sender<Status>,
+        notification_tx: mpsc::Sender<Notification>,
+    ) -> Result<()> {
+        self.client.identify().await?;
 
-        client.identify().await?;
-
-        let _notification_sub: Subscription<Value> =
-            client.subscribe_remote_method(NOTIFICATION_METHOD).await?;
-        let mut status_sub = client.subscribe_printer_status().await?;
+        self.client
+            .register_remote_method(NOTIFICATION_METHOD)
+            .await?;
+        let mut notification_sub = self
+            .client
+            .subscribe_remote_method::<NotificationParams>(NOTIFICATION_METHOD)
+            .await?;
+        let mut status_sub = self.client.subscribe_printer_status().await?;
         let mut ready_sub = self.client.subscribe_klippy_ready().await?;
         let mut disconnected_sub = self.client.subscribe_klippy_disconnected().await?;
         let mut shutdown_sub = self.client.subscribe_klippy_shutdown().await?;
@@ -78,8 +92,8 @@ impl Service {
         self.update_klippy_status(self.get_initial_klippy_state().await?, &status_tx)
             .await?;
         loop {
+            // TODO: handle errors
             select! {
-                // TODO: Handle errors
                 Some(Ok(notif)) = status_sub.next() => {
                     status_tx.send_replace(Status::from(&notif.status));
                 }
@@ -91,6 +105,22 @@ impl Service {
                 }
                 Some(Ok(_)) = shutdown_sub.next() => {
                     self.update_klippy_status(KlippyState::Shutdown, &status_tx).await?;
+                }
+                opt = notification_sub.next() => {
+                    match opt {
+                        None => {},
+                        Some(notif) => {
+                            match notif {
+                                Ok(notif) => {
+                                    tracing::info!("received notification: {:?}", notif);
+                                    notification_tx.send(Notification { message: notif.message }).await?;
+                                }
+                                Err(err) => {
+                                    tracing::error!("error receiving notification: {:?}", err);
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -133,9 +163,6 @@ impl Service {
 
     async fn register(&self) -> Result<()> {
         self.client.register_printer_subscription().await?;
-        self.client
-            .register_remote_method(NOTIFICATION_METHOD)
-            .await?;
         Ok(())
     }
 }

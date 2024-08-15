@@ -1,12 +1,12 @@
-use super::{PrintStats, PrinterObjectStatus};
+use super::api::{PrintStats, PrinterObjectStatus};
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct PrintInfo {
     pub current_layer: u16,
     pub total_layer: u16,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct Printer {
     pub job: Option<PrintInfo>,
 }
@@ -24,7 +24,7 @@ pub enum State {
     Error(String),
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct Status {
     pub printer: Option<Printer>,
     pub state: State,

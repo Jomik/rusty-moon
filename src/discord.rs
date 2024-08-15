@@ -8,7 +8,10 @@ use serenity::{
     all::{CreateMessage, EditMessage, GatewayIntents, UserId},
     Client,
 };
-use tokio::sync::watch;
+use tokio::{
+    select,
+    sync::{mpsc, watch},
+};
 
 use crate::moonraker;
 
@@ -56,22 +59,34 @@ impl Service {
         ServiceBuilder::new(config)
     }
 
-    pub async fn start(self, mut status_rx: watch::Receiver<moonraker::Status>) -> Result<()> {
-        let http = self.client.http;
+    pub async fn start(
+        self,
+        mut status_rx: watch::Receiver<moonraker::Status>,
+        mut notification_rx: mpsc::Receiver<moonraker::Notification>,
+    ) -> Result<()> {
+        let http = self.client.http.clone();
         let user = self.user_id.to_user(http.clone()).await?;
 
-        let message_builder = CreateMessage::new().content("Hello!");
+        let status = status_rx.borrow_and_update().clone();
+        let message_builder = CreateMessage::new().content(self.get_status_message(status));
         let mut message = user.direct_message(http.clone(), message_builder).await?;
 
         loop {
-            let status = status_rx.borrow_and_update().clone();
-            let edit_builder = EditMessage::new().content(format!("{:?}", status));
-            message.edit(http.clone(), edit_builder).await?;
-            if status_rx.changed().await.is_err() {
-                break;
+            // TODO: handle errors
+            select! {
+                Ok(()) = status_rx.changed() =>{
+                    let edit_builder = EditMessage::new().content(self.get_status_message(status_rx.borrow().clone()));
+                    message.edit(http.clone(), edit_builder).await?;
+                },
+                Some(notification) = notification_rx.recv() => {
+                    let message_builder = CreateMessage::new().content(notification.message);
+                    message = user.direct_message(http.clone(), message_builder).await?;
+                },
             }
         }
+    }
 
-        Ok(())
+    fn get_status_message(&self, status: moonraker::Status) -> String {
+        format!("{:?}", status)
     }
 }

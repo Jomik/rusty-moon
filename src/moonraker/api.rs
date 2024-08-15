@@ -43,16 +43,18 @@ pub struct PrinterObjectStatusResponse {
     #[serde(default)]
     pub status: PrinterObjectStatus,
     #[serde(rename = "eventtime")]
-    pub event_time: f64,
+    pub _event_time: f64,
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]
 pub struct IdentifyResult {
-    pub connection_id: u64,
+    #[serde(rename = "connection_id")]
+    pub _connection_id: u64,
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]
 pub struct ServerInfoResponse {
-    pub klippy_connected: bool,
+    #[serde(rename = "klippy_connected")]
+    pub _klippy_connected: bool,
     pub klippy_state: String,
 }

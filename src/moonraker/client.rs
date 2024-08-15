@@ -1,7 +1,5 @@
-use crate::moonraker::IdentifyResult;
-
+use super::api::{IdentifyResult, PrinterObjectStatusResponse, ServerInfoResponse};
 use super::client_builder::ClientBuilder;
-use super::{api::PrinterObjectStatusResponse, ServerInfoResponse};
 use anyhow::Result;
 use jsonrpsee::{
     core::{
@@ -93,12 +91,12 @@ impl Client {
         Ok(response)
     }
 
-    pub async fn subscribe_remote_method<T>(
+    pub async fn subscribe_remote_method<Params>(
         &self,
         method: impl AsRef<str>,
-    ) -> Result<Subscription<T>>
+    ) -> Result<Subscription<Params>>
     where
-        T: serde::de::DeserializeOwned,
+        Params: serde::de::DeserializeOwned,
     {
         let method = method.as_ref();
         let sub = self.client.subscribe_to_method(method).await?;
