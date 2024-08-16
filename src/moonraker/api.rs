@@ -58,3 +58,13 @@ pub struct ServerInfoResponse {
     pub _klippy_connected: bool,
     pub klippy_state: String,
 }
+
+#[derive(Clone, Debug, Default, Deserialize)]
+pub struct WebCamInformationResult {
+    pub webcam: WebCamInformation,
+}
+
+#[derive(Clone, Debug, Default, Deserialize)]
+pub struct WebCamInformation {
+    pub snapshot_url: String,
+}

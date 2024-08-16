@@ -1,5 +1,5 @@
-use super::api::{IdentifyResult, PrinterObjectStatusResponse, ServerInfoResponse};
 use super::client_builder::ClientBuilder;
+use super::{api::*, Config};
 use anyhow::Result;
 use jsonrpsee::{
     core::{
@@ -17,11 +17,12 @@ const URL: &str = env!("CARGO_PKG_HOMEPAGE");
 
 pub struct Client {
     pub(crate) client: WsClient,
+    pub host: String,
 }
 
 impl Client {
-    pub fn builder(url: impl AsRef<str>) -> ClientBuilder {
-        ClientBuilder::new(url)
+    pub fn builder(config: Config) -> ClientBuilder {
+        ClientBuilder::new(config)
     }
 
     pub async fn identify(&self) -> Result<()> {
@@ -89,6 +90,22 @@ impl Client {
             .request("printer.objects.subscribe", params)
             .await?;
         Ok(response)
+    }
+
+    pub async fn get_webcam_information(&self, name: impl AsRef<str>) -> Result<WebCamInformation> {
+        let mut params = ObjectParams::new();
+        params.insert("name", name.as_ref())?;
+        let response: serde_json::Value = self
+            .client
+            .request("server.webcams.get_item", params)
+            .await?;
+        let response = serde_json::from_value::<WebCamInformationResult>(response)?;
+        let snapshot_url = if response.webcam.snapshot_url.starts_with("/") {
+            format!("http://{}{}", self.host, response.webcam.snapshot_url)
+        } else {
+            response.webcam.snapshot_url
+        };
+        Ok(WebCamInformation { snapshot_url })
     }
 
     pub async fn subscribe_remote_method<Params>(

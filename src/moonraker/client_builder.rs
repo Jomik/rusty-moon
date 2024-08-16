@@ -6,16 +6,18 @@ use std::{
 use anyhow::Result;
 use jsonrpsee::ws_client::WsClientBuilder;
 
-use super::client::Client;
+use super::{client::Client, Config};
 
 pub struct ClientBuilder {
-    url: String,
+    host: String,
+    port: Option<u16>,
 }
 
 impl ClientBuilder {
-    pub fn new(url: impl AsRef<str>) -> ClientBuilder {
+    pub fn new(config: Config) -> ClientBuilder {
         ClientBuilder {
-            url: url.as_ref().to_string(),
+            host: config.host,
+            port: config.port,
         }
     }
 }
@@ -26,8 +28,18 @@ impl IntoFuture for ClientBuilder {
 
     fn into_future(self) -> Self::IntoFuture {
         Box::pin(async move {
-            let client = WsClientBuilder::default().build(self.url).await?;
-            Ok(Client { client })
+            let client = WsClientBuilder::default()
+                .build(format!(
+                    "ws://{}:{}/websocket",
+                    self.host,
+                    self.port.unwrap_or(7125)
+                ))
+                .await?;
+
+            Ok(Client {
+                client,
+                host: self.host,
+            })
         })
     }
 }

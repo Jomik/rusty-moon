@@ -1,6 +1,6 @@
 use tokio::sync::{mpsc, watch};
 use tracing::Level;
-use tracing_subscriber::util::SubscriberInitExt;
+use tracing_subscriber::{util::SubscriberInitExt, EnvFilter};
 
 use rusty_moon::{config, discord, moonraker};
 
@@ -9,7 +9,8 @@ async fn main() -> anyhow::Result<()> {
     let conf = config::load()?;
 
     tracing_subscriber::FmtSubscriber::builder()
-        .with_max_level(Level::DEBUG)
+        .with_max_level(Level::INFO)
+        .with_env_filter(EnvFilter::try_new("rusty_moon=debug")?)
         .pretty()
         .finish()
         .try_init()?;

@@ -1,4 +1,6 @@
+use std::fs::File;
 use std::future::{Future, IntoFuture};
+use std::io::Write;
 use std::pin::Pin;
 use std::sync::Arc;
 
@@ -6,6 +8,7 @@ use anyhow::Result;
 use tokio::select;
 use tokio::sync::{mpsc, watch};
 
+use self::client::Client;
 pub use self::status::*;
 
 mod api;
@@ -18,6 +21,7 @@ const NOTIFICATION_METHOD: &str = "rusty_moon_notification";
 #[derive(Debug, Clone, serde::Deserialize)]
 struct NotificationParams {
     pub message: String,
+    pub webcam: Option<String>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -28,14 +32,16 @@ pub enum KlippyState {
     Shutdown,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Debug, Default)]
 pub struct Notification {
     pub message: String,
+    pub image: Option<File>,
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]
 pub struct Config {
-    pub url: String,
+    pub host: String,
+    pub port: Option<u16>,
 }
 
 pub struct ServiceBuilder {
@@ -54,7 +60,7 @@ impl IntoFuture for ServiceBuilder {
 
     fn into_future(self) -> Self::IntoFuture {
         Box::pin(async move {
-            let client = Arc::new(client::Client::builder(self.config.url).await?);
+            let client = Arc::new(Client::builder(self.config).await?);
 
             Ok(Service { client })
         })
@@ -62,7 +68,7 @@ impl IntoFuture for ServiceBuilder {
 }
 
 pub struct Service {
-    client: Arc<client::Client>,
+    client: Arc<Client>,
 }
 
 impl Service {
@@ -94,9 +100,9 @@ impl Service {
         loop {
             // TODO: handle errors
             select! {
-                Some(Ok(notif)) = status_sub.next() => {
-                    status_tx.send_replace(Status::from(&notif.status));
-                }
+            Some(Ok(notif)) = status_sub.next() => {
+                status_tx.send_replace(Status::from(&notif.status));
+            }
                 Some(Ok(_)) = ready_sub.next() => {
                     self.update_klippy_status(KlippyState::Ready, &status_tx).await?;
                 }
@@ -113,10 +119,32 @@ impl Service {
                             match notif {
                                 Ok(notif) => {
                                     tracing::info!("received notification: {:?}", notif);
-                                    notification_tx.send(Notification { message: notif.message }).await?;
+                                    let image = match notif.webcam {
+                                        Some(webcam) => {
+                                            let webcam = self.client.get_webcam_information(&webcam).await;
+                                            match webcam {
+                                                Ok(webcam) => {
+                                                    tracing::debug!("webcam snapshot url: {:?}", webcam.snapshot_url);
+                                                    let response = reqwest::get(webcam.snapshot_url).await?;
+                                                    let mut file = tempfile::Builder::new().prefix("rusty_moon_").suffix(".jpeg").tempfile()?;
+                                                    let content = response.bytes().await?;
+                                                    file.write_all(&content)?;
+                                                    tracing::debug!("saved webcam snapshot to {:?}", file.path());
+                                                    Some(file.reopen()?)
+                                                },
+                                                Err(err) => {
+                                                    tracing::error!("error getting webcam information: {}", err);
+                                                    None
+                                                }
+                                            }
+                                        },
+                                        None => None,
+                                    };
+
+                                    notification_tx.send(Notification { message: notif.message, image }).await?;
                                 }
                                 Err(err) => {
-                                    tracing::error!("error receiving notification: {:?}", err);
+                                    tracing::error!("error reading notification: {:?}", err);
                                 }
                             }
                         }
@@ -143,7 +171,12 @@ impl Service {
                     state: State::Disconnected,
                 });
             }
-            _ => {}
+            KlippyState::Shutdown => {
+                // status_tx.send_replace(Status {
+                //     printer: None,
+                //     state: State::Shutdown(),
+                // });
+            }
         };
         Ok(())
     }

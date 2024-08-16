@@ -1,5 +1,5 @@
 [moonraker]
-url = "ws://localhost:7125/websocket"
+host = "localhost"
 
 [discord]
 token = "your bot token"
