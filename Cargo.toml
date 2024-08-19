@@ -8,17 +8,22 @@ license = "GPL-3.0"
 [dependencies]
 anyhow = "1.0.86"
 config = "0.14.0"
-jsonrpsee = { version = "0.24.3", features = [
+jsonrpsee = { version = "0.24.3", default-features = false, features = [
   "tokio",
   "ws-client",
   "jsonrpsee-core",
 ] }
-reqwest = { version = "0.12.5", features = [] }
-serde = "1.0.204"
+reqwest = { version = "0.12.5", default-features = false, features = [
+  "json",
+  "rustls-tls",
+] }
+rustls = "0.23.12"
+serde = "1.0.208"
 serde_json = "1.0.120"
 serenity = "0.12.2"
 tempfile = "3.12.0"
 thiserror = "1.0.62"
-tokio = { version = "1.38.0", features = ["full"] }
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
+tokio = { version = "1.39.3", features = ["full"] }
+tokio-rustls = "0.26.0"

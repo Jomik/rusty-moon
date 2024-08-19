@@ -1,0 +1,16 @@
+[Unit]
+Description=Rusty Moon Notification service
+Wants=moonraker.service
+After=moonraker.service
+StartLimitIntervalSec=500
+StartLimitBurst=5
+
+[Service]
+Type=simple
+Restart=on-failure
+RestartSec=5s
+WorkingDirectory=/home/pi/rusty-moon
+ExecStart=/home/pi/rusty-moon/rusty-moon
+
+[Install]
+WantedBy=multi-user.target

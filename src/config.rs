@@ -12,7 +12,7 @@ pub struct Config {
 pub fn load() -> Result<Config, ConfigError> {
     config::Config::builder()
         .add_source(config::File::with_name("config"))
-        .add_source(config::File::with_name("config.local"))
+        .add_source(config::File::with_name("config.local").required(false))
         .build()?
         .try_deserialize::<Config>()
 }
