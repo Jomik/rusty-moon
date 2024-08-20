@@ -1,6 +1,5 @@
 use std::fs::File;
 use std::future::{Future, IntoFuture};
-use std::io::Write;
 use std::pin::Pin;
 use std::sync::Arc;
 
@@ -15,6 +14,7 @@ mod api;
 mod client;
 mod client_builder;
 mod status;
+mod webcam;
 
 const NOTIFICATION_METHOD: &str = "rusty_moon_notification";
 
@@ -100,58 +100,50 @@ impl Service {
         loop {
             // TODO: handle errors
             select! {
-            Some(Ok(notif)) = status_sub.next() => {
-                status_tx.send_replace(Status::from(&notif.status));
-            }
-                Some(Ok(_)) = ready_sub.next() => {
-                    self.update_klippy_status(KlippyState::Ready, &status_tx).await?;
-                }
-                Some(Ok(_)) = disconnected_sub.next() => {
-                    self.update_klippy_status(KlippyState::Disconnected, &status_tx).await?;
-                }
-                Some(Ok(_)) = shutdown_sub.next() => {
-                    self.update_klippy_status(KlippyState::Shutdown, &status_tx).await?;
-                }
-                opt = notification_sub.next() => {
-                    match opt {
-                        None => {},
-                        Some(notif) => {
-                            match notif {
-                                Ok(notif) => {
-                                    tracing::info!("received notification: {:?}", notif);
-                                    let image = match notif.webcam {
-                                        Some(webcam) => {
-                                            let webcam = self.client.get_webcam_information(&webcam).await;
-                                            match webcam {
-                                                Ok(webcam) => {
-                                                    tracing::debug!("webcam snapshot url: {:?}", webcam.snapshot_url);
-                                                    let response = reqwest::get(webcam.snapshot_url).await?;
-                                                    let mut file = tempfile::Builder::new().prefix("rusty_moon_").suffix(".jpeg").tempfile()?;
-                                                    let content = response.bytes().await?;
-                                                    file.write_all(&content)?;
-                                                    tracing::debug!("saved webcam snapshot to {:?}", file.path());
-                                                    Some(file.reopen()?)
-                                                },
-                                                Err(err) => {
-                                                    tracing::error!("error getting webcam information: {}", err);
-                                                    None
-                                                }
-                                            }
-                                        },
-                                        None => None,
-                                    };
-
-                                    notification_tx.send(Notification { message: notif.message, image }).await?;
-                                }
-                                Err(err) => {
-                                    tracing::error!("error reading notification: {:?}", err);
-                                }
-                            }
-                        }
-                    }
-                }
+                Some(res) = status_sub.next() => match res {
+                    Ok(status) => {
+                        status_tx.send_replace(Status::from(&status.status));
+                    },
+                    Err(err) => tracing::error!("error reading status subscription: {:?}", err),
+                },
+                Some(res) = ready_sub.next() => match res {
+                    Ok(_) => self.update_klippy_status(KlippyState::Ready, &status_tx).await?,
+                    Err(err) => tracing::error!("error reading ready subscription: {:?}", err),
+                },
+                Some(res) = disconnected_sub.next() => match res {
+                    Ok(_) => self.update_klippy_status(KlippyState::Disconnected, &status_tx).await?,
+                    Err(err) => tracing::error!("error reading disconnected subscription: {:?}", err),
+                },
+                Some(res) = shutdown_sub.next() => match res {
+                    Ok(_) => self.update_klippy_status(KlippyState::Shutdown, &status_tx).await?,
+                    Err(err) => tracing::error!("error reading shutdown subscription: {:?}", err),
+                },
+                Some(notification) = notification_sub.next() => match notification {
+                    Ok(notification) => self.handle_notification(notification, &notification_tx).await?,
+                    Err(err) => tracing::error!("error reading notification: {:?}", err),
+                },
             }
         }
+    }
+
+    async fn handle_notification(
+        &self,
+        params: NotificationParams,
+        notification_tx: &mpsc::Sender<Notification>,
+    ) -> Result<()> {
+        tracing::info!("received notification: {:?}", params);
+        let image = match params.webcam {
+            Some(webcam) => webcam::get_webcam_snapshot(&self.client, webcam).await?,
+            None => None,
+        };
+
+        notification_tx
+            .send(Notification {
+                message: params.message,
+                image,
+            })
+            .await?;
+        Ok(())
     }
 
     async fn update_klippy_status(
