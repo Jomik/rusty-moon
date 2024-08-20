@@ -1,11 +1,10 @@
-target := "aarch64-unknown-linux-gnu"
+default_target := "aarch64-unknown-linux-gnu"
 project := "rusty-moon"
-host := "tv06.local"
 
-build-for-pi:
+build target=(default_target):
   cargo build --release --target={{target}}
 
-deploy-pi: build-for-pi
+deploy host target=(default_target): (build target)
   ssh {{host}} 'systemctl stop {{project}}'
   scp ./target/{{target}}/release/{{project}} {{host}}:/home/pi/{{project}}/
   ssh {{host}} 'systemctl start {{project}}'
