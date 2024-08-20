@@ -152,6 +152,7 @@ async fn run(ctx: &Context) -> Result<()> {
     };
 
     let status = status_rx.lock().await.borrow_and_update().clone();
+    set_presence(ctx, &status.state);
     let message_builder = CreateMessage::new().embeds(get_status_embeds(status));
     let mut message = user.direct_message(&ctx.http, message_builder).await?;
     message.pin(&ctx.http).await?;
@@ -163,20 +164,7 @@ async fn run(ctx: &Context) -> Result<()> {
         select! {
             Ok(()) = status_rx_lock.changed() => {
                 let status = status_rx_lock.borrow_and_update().clone();
-                match status.state {
-                    State::Disconnected | State::Shutdown(_) | State::Error(_) => {
-                        ctx.set_presence(Some(ActivityData::custom("Disconnected")), OnlineStatus::Offline);
-                    },
-                    State::Printing => {
-                        ctx.set_presence(Some(ActivityData::custom("Printing")), OnlineStatus::DoNotDisturb);
-                    },
-                    State::Paused => {
-                        ctx.set_presence(Some(ActivityData::custom("Paused")), OnlineStatus::Idle);
-                    },
-                    State::Startup | State::Standby | State::Complete => {
-                        ctx.set_presence(Some(ActivityData::custom("Standby")), OnlineStatus::Online);
-                    },
-                }
+                set_presence(ctx, &status.state);
 
                 let edit_builder = EditMessage::new().embeds(get_status_embeds(status));
                 message.edit(&ctx.http, edit_builder).await?;
@@ -190,6 +178,35 @@ async fn run(ctx: &Context) -> Result<()> {
             },
         }
     }
+}
+
+fn set_presence(ctx: &Context, state: &State) {
+    match state {
+        State::Disconnected => {
+            ctx.set_presence(
+                Some(ActivityData::custom("Disconnected")),
+                OnlineStatus::Idle,
+            );
+        }
+        State::Printing => {
+            ctx.set_presence(
+                Some(ActivityData::custom("Printing")),
+                OnlineStatus::DoNotDisturb,
+            );
+        }
+        State::Paused => {
+            ctx.set_presence(Some(ActivityData::custom("Paused")), OnlineStatus::Online);
+        }
+        State::Startup | State::Standby | State::Complete => {
+            ctx.set_presence(Some(ActivityData::custom("Ready")), OnlineStatus::Online);
+        }
+        State::Shutdown(_) => {
+            ctx.set_presence(Some(ActivityData::custom("Shutdown")), OnlineStatus::Idle);
+        }
+        State::Error(_) => {
+            ctx.set_presence(Some(ActivityData::custom("Error")), OnlineStatus::Idle);
+        }
+    };
 }
 
 fn get_status_embeds(status: moonraker::Status) -> Vec<CreateEmbed> {
