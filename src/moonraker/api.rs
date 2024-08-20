@@ -22,7 +22,8 @@ pub struct PrintStats {
     #[serde(default)]
     pub info: PrintStatsInfo,
     pub state: Option<String>,
-    pub filename: Option<String>,
+    #[serde(rename = "filename")]
+    pub file_name: Option<String>,
     pub total_duration: Option<f64>,
     pub filament_used: Option<f64>,
     pub message: Option<String>,

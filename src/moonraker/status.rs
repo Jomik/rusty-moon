@@ -1,14 +1,15 @@
 use super::api::{PrintStats, PrinterObjectStatus};
 
 #[derive(Clone, Debug, Default, PartialEq)]
-pub struct PrintInfo {
+pub struct JobInfo {
+    pub file_name: String,
     pub current_layer: u16,
     pub total_layer: u16,
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Printer {
-    pub job: Option<PrintInfo>,
+    pub job: Option<JobInfo>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -49,9 +50,10 @@ impl From<&PrintStats> for Printer {
     fn from(value: &PrintStats) -> Self {
         Self {
             job: match State::from(value) {
-                State::Printing | State::Paused | State::Complete => Some(PrintInfo {
+                State::Printing | State::Paused | State::Complete => Some(JobInfo {
                     current_layer: value.info.current_layer.unwrap_or_default(),
                     total_layer: value.info.total_layer.unwrap_or_default(),
+                    file_name: value.file_name.clone().unwrap_or("unknown".to_string()),
                 }),
                 _ => None,
             },
