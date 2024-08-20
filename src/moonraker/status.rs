@@ -1,10 +1,20 @@
-use super::api::{PrintStats, PrinterObjectStatus};
+use core::fmt;
+use std::fmt::{Display, Formatter};
+
+use super::api::{ExcludeObject, PrintStats, PrinterObjectStatus};
+
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct ObjectInformation {
+    pub name: String,
+    pub excluded: bool,
+}
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct JobInfo {
     pub file_name: String,
     pub current_layer: u16,
     pub total_layer: u16,
+    pub objects: Vec<ObjectInformation>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -31,6 +41,21 @@ pub struct Status {
     pub state: State,
 }
 
+impl Display for State {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Disconnected => write!(f, "Disconnected"),
+            Self::Startup => write!(f, "Startup"),
+            Self::Standby => write!(f, "Standby"),
+            Self::Printing => write!(f, "Printing"),
+            Self::Paused => write!(f, "Paused"),
+            Self::Complete => write!(f, "Complete"),
+            Self::Shutdown(reason) => write!(f, "Shutdown: {}", reason),
+            Self::Error(message) => write!(f, "Error: {}", message),
+        }
+    }
+}
+
 impl From<&PrintStats> for State {
     fn from(value: &PrintStats) -> Self {
         match value.state.as_deref() {
@@ -46,14 +71,19 @@ impl From<&PrintStats> for State {
     }
 }
 
-impl From<&PrintStats> for Printer {
-    fn from(value: &PrintStats) -> Self {
+impl From<PrinterObjectStatus> for Printer {
+    fn from(value: PrinterObjectStatus) -> Self {
         Self {
-            job: match State::from(value) {
+            job: match State::from(&value.print_stats) {
                 State::Printing | State::Paused | State::Complete => Some(JobInfo {
-                    current_layer: value.info.current_layer.unwrap_or_default(),
-                    total_layer: value.info.total_layer.unwrap_or_default(),
-                    file_name: value.file_name.clone().unwrap_or("unknown".to_string()),
+                    current_layer: value.print_stats.info.current_layer.unwrap_or_default(),
+                    total_layer: value.print_stats.info.total_layer.unwrap_or_default(),
+                    file_name: value
+                        .print_stats
+                        .file_name
+                        .clone()
+                        .unwrap_or("unknown".to_string()),
+                    objects: (&value.exclude_object).into(),
                 }),
                 _ => None,
             },
@@ -61,10 +91,23 @@ impl From<&PrintStats> for Printer {
     }
 }
 
+impl From<&ExcludeObject> for Vec<ObjectInformation> {
+    fn from(value: &ExcludeObject) -> Self {
+        value
+            .objects
+            .iter()
+            .map(|object| ObjectInformation {
+                name: object.name.clone(),
+                excluded: value.excluded_objects.contains(&object.name),
+            })
+            .collect()
+    }
+}
+
 impl From<&PrinterObjectStatus> for Status {
     fn from(value: &PrinterObjectStatus) -> Self {
         Self {
-            printer: Some(Printer::from(&value.print_stats)),
+            printer: Some(Printer::from(value.clone())),
             state: State::from(&value.print_stats),
         }
     }

@@ -51,6 +51,7 @@ impl Client {
             "objects",
             json!({
                     "display_status": ["progress", "message"],
+                    "exclude_object": ["objects", "excluded_objects", "current_object"],
                     "idle_timeout": ["state", "printing_time"],
                     "print_stats": ["info", "filename", "total_duration", "print_duration", "filament_used", "state", "message"],
                     "webhooks": ["state", "state_message"],

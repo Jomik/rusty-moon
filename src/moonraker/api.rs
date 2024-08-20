@@ -18,6 +18,20 @@ pub struct PrintStatsInfo {
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]
+pub struct Object {
+    pub name: String,
+}
+
+#[derive(Clone, Debug, Default, Deserialize)]
+pub struct ExcludeObject {
+    #[serde(default)]
+    pub objects: Vec<Object>,
+    pub current_object: Option<String>,
+    #[serde(default)]
+    pub excluded_objects: Vec<String>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize)]
 pub struct PrintStats {
     #[serde(default)]
     pub info: PrintStatsInfo,
@@ -33,6 +47,8 @@ pub struct PrintStats {
 pub struct PrinterObjectStatus {
     #[serde(default)]
     pub display_status: DisplayStatus,
+    #[serde(default)]
+    pub exclude_object: ExcludeObject,
     #[serde(default)]
     pub idle_timeout: IdleTimeout,
     #[serde(default)]

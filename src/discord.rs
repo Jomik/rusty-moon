@@ -1,3 +1,4 @@
+mod job_status;
 mod typemap;
 
 use std::{
@@ -10,11 +11,12 @@ use std::{
 };
 
 use anyhow::Result;
+use job_status::JobStatusMessage;
 use serenity::{
     all::{
-        ActivityData, Channel, ChannelId, ChannelType, Context, CreateAttachment, CreateEmbed,
-        CreateMessage, CreateThread, EditMessage, EventHandler, GatewayIntents, GetMessages,
-        GuildChannel, Message, OnlineStatus, Ready, UserId,
+        ActivityData, Channel, ChannelId, ChannelType, Context, CreateAllowedMentions,
+        CreateAttachment, CreateMessage, CreateThread, EventHandler, GatewayIntents, GuildChannel,
+        Mention, Message, OnlineStatus, Ready, UserId,
     },
     async_trait, Client,
 };
@@ -79,7 +81,11 @@ impl EventHandler for Handler {
         }
 
         let ctx = Arc::clone(&ctx);
-        tokio::spawn(async move { run(&ctx).await });
+        tokio::spawn(async move {
+            if let Err(err) = run(&ctx).await {
+                tracing::error!("Discord run error: {:?}", err);
+            }
+        });
 
         self.is_loop_running.swap(true, Ordering::Relaxed);
     }
@@ -129,21 +135,7 @@ async fn run(ctx: &Context) -> Result<()> {
             .to_owned()
     };
     let user = ctx.http.get_user(user_id).await?;
-    let bot = ctx.http.get_current_user().await?;
     let channel = ctx.http.get_channel(channel_id).await?;
-
-    {
-        let dm_channel = user.create_dm_channel(ctx).await?;
-        let message_ids = dm_channel
-            .messages(ctx, GetMessages::new())
-            .await?
-            .into_iter()
-            .filter(|msg| msg.author.id == bot.id);
-
-        for message in message_ids {
-            message.delete(ctx).await?;
-        }
-    }
 
     let status_rx = {
         let data_read = ctx.data.read().await;
@@ -157,13 +149,11 @@ async fn run(ctx: &Context) -> Result<()> {
 
     let status = status_rx.lock().await.borrow_and_update().clone();
     set_presence(ctx, &status.state);
-    let message_builder = CreateMessage::new().embeds(get_status_embeds(&status));
-    let mut message = user.direct_message(ctx, message_builder).await?;
-    message.pin(ctx).await?;
 
     let mut current_file_name = String::default();
-    let mut thread: GuildChannel;
-    let mut thread_status = Message::default();
+    // TODO: make these Option
+    let mut thread = GuildChannel::default();
+    let mut message = Message::default();
 
     loop {
         let mut status_rx_lock = status_rx.lock().await;
@@ -174,28 +164,26 @@ async fn run(ctx: &Context) -> Result<()> {
                 let status = status_rx_lock.borrow_and_update().clone();
                 set_presence(ctx, &status.state);
 
-                let edit_builder = EditMessage::new().embeds(get_status_embeds(&status));
-                message.edit(ctx, edit_builder.clone()).await?;
-
                 if let Channel::Guild(channel) = channel.clone() {
-                    if let Some(mut job) = status.clone().printer.and_then(|printer| printer.job) {
-                        job = job.clone();
-                        if job.file_name != current_file_name{
-                            current_file_name = job.file_name;
+                    if let Some(job) = status.clone().printer.and_then(|printer| printer.job) {
+                        if job.file_name != current_file_name {
+                            current_file_name = job.file_name.clone();
                             thread = channel.create_thread(ctx, CreateThread::new(current_file_name.clone()).kind(ChannelType::PublicThread)).await?;
-                            thread_status = thread.send_message(ctx, CreateMessage::new().embeds(get_status_embeds(&status))).await?;
+                            message = thread.send_message(ctx, JobStatusMessage::from((status.state, job)).into()).await?;
                         } else {
-                            thread_status.edit(ctx, edit_builder).await?;
+                            message.edit(ctx, JobStatusMessage::from((status.state, job)).into()).await?;
                         }
                     }
                 }
             },
-            Some(notification) = notification_rx_lock.recv() => {
-                let mut message_builder = CreateMessage::new().content(notification.message);
+                Some(notification) = notification_rx_lock.recv() => {
+                let mut message_builder = CreateMessage::new()
+                    .content(format!("{}\n{}", Mention::from(user.id),notification.message))
+                    .allowed_mentions(CreateAllowedMentions::new().users(vec![user.id]));
                 if let Some(image) =  notification.image {
                     message_builder = message_builder.add_file(CreateAttachment::file(&image.into(), "image.png").await?);
                 };
-                user.direct_message(ctx, message_builder).await?;
+                thread.send_message(ctx, message_builder).await?;
             },
         }
     }
@@ -228,21 +216,4 @@ fn set_presence(ctx: &Context, state: &State) {
             ctx.set_presence(Some(ActivityData::custom("Error")), OnlineStatus::Idle);
         }
     };
-}
-
-fn get_status_embeds(status: &moonraker::Status) -> Vec<CreateEmbed> {
-    let job_status = status.clone().printer.map(|printer| {
-        printer.job.map_or_else(
-            || CreateEmbed::new().title("Job status").description("No job"),
-            |job| {
-                CreateEmbed::new().title("Job status").field(
-                    "Layer",
-                    format!("{} / {}", job.current_layer, job.total_layer),
-                    true,
-                )
-            },
-        )
-    });
-
-    vec![job_status].into_iter().flatten().collect()
 }
