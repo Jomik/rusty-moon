@@ -1,7 +1,6 @@
 pub use config::ConfigError;
 
-use crate::discord;
-use crate::moonraker;
+use crate::{discord, moonraker};
 
 #[derive(Debug, Clone, serde::Deserialize)]
 pub struct Config {

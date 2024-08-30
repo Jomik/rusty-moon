@@ -1,5 +1,4 @@
-use super::client_builder::ClientBuilder;
-use super::{api::*, Config};
+use super::{api::*, client_builder::ClientBuilder, Config};
 use anyhow::Result;
 use jsonrpsee::{
     core::{

@@ -1,11 +1,15 @@
-use std::fs::File;
-use std::future::{Future, IntoFuture};
-use std::pin::Pin;
-use std::sync::Arc;
+use std::{
+    fs::File,
+    future::{Future, IntoFuture},
+    pin::Pin,
+    sync::Arc,
+};
 
 use anyhow::Result;
-use tokio::select;
-use tokio::sync::{mpsc, watch};
+use tokio::{
+    select,
+    sync::{mpsc, watch},
+};
 
 use self::client::Client;
 pub use self::status::*;
